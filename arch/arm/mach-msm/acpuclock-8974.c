@@ -310,30 +310,6 @@ static struct l2_level l2_freq_tbl_v2_elementalx[] __initdata = {
 	{ }
 };
 
-static struct l2_level l2_freq_tbl_v2_ultra[] __initdata = {
-	[0]  = { {  300000, PLL_0, 0,   0 }, LVL_LOW,   950000, 0 },
-	[1]  = { {  345600, HFPLL, 2,  36 }, LVL_LOW,   950000, 1 },
-	[2]  = { {  422400, HFPLL, 2,  44 }, LVL_LOW,   950000, 2 },
-	[3]  = { {  499200, HFPLL, 2,  52 }, LVL_LOW,   950000, 3 },
-	[4]  = { {  576000, HFPLL, 1,  30 }, LVL_LOW,   950000, 4 },
-	[5]  = { {  652800, HFPLL, 1,  34 }, LVL_NOM,   950000, 4 },
-	[6]  = { {  729600, HFPLL, 1,  38 }, LVL_NOM,   950000, 4 },
-	[7]  = { {  806400, HFPLL, 1,  42 }, LVL_NOM,   950000, 4 },
-	[8]  = { {  883200, HFPLL, 1,  46 }, LVL_NOM,   950000, 5 },
-	[9]  = { {  960000, HFPLL, 1,  50 }, LVL_NOM,   950000, 5 },
-	[10] = { { 1036800, HFPLL, 1,  54 }, LVL_NOM,   950000, 5 },
-	[11] = { { 1113600, HFPLL, 1,  58 }, LVL_HIGH, 1050000, 6 },
-	[12] = { { 1190400, HFPLL, 1,  62 }, LVL_HIGH, 1050000, 6 },
-	[13] = { { 1267200, HFPLL, 1,  66 }, LVL_HIGH, 1050000, 6 },
-	[14] = { { 1344000, HFPLL, 1,  70 }, LVL_HIGH, 1050000, 6 },
-	[15] = { { 1420800, HFPLL, 1,  74 }, LVL_HIGH, 1050000, 6 },
-	[16] = { { 1497600, HFPLL, 1,  78 }, LVL_HIGH, 1050000, 6 },
-	[17] = { { 1574400, HFPLL, 1,  82 }, LVL_HIGH, 1050000, 7 },
-	[18] = { { 1651200, HFPLL, 1,  86 }, LVL_HIGH, 1050000, 7 },
-	[19] = { { 1920000, HFPLL, 1, 100 }, LVL_HIGH, 1050000, 9 },
-	{ }
-};
-
 static struct acpu_level acpu_freq_tbl_2g_pvs0[] __initdata = {
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  815000,  73 },
 	{ 0, {  345600, HFPLL, 2,  36 },  L2(1),  825000,  85 },
@@ -1060,8 +1036,6 @@ static int __init get_opt_level(char *l2_opt)
 		opt_bin = 0;
 	} else if (strcmp(l2_opt, "1") == 0) {
 		opt_bin = 1;
-	} else if (strcmp(l2_opt, "2") == 0) {
-		opt_bin = 2;
 	} else {
 		opt_bin = 0;
 	}
@@ -1112,11 +1086,6 @@ static int __init acpuclk_8974_probe(struct platform_device *pdev)
 	if (opt_bin == 1) {
 		acpuclk_8974_params.l2_freq_tbl = l2_freq_tbl_v2_elementalx;
 		acpuclk_8974_params.l2_freq_tbl_size = sizeof(l2_freq_tbl_v2_elementalx);
-	}
-
-	if (opt_bin == 2) {
-		acpuclk_8974_params.l2_freq_tbl = l2_freq_tbl_v2_ultra;
-		acpuclk_8974_params.l2_freq_tbl_size = sizeof(l2_freq_tbl_v2_ultra);
 	}
 
 	return acpuclk_krait_init(&pdev->dev, &acpuclk_8974_params);
