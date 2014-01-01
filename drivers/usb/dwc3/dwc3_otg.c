@@ -24,11 +24,6 @@
 #include "io.h"
 #include "xhci.h"
 
-#define VBUS_REG_CHECK_DELAY	(msecs_to_jiffies(1000))
-#define MAX_INVALID_CHRGR_RETRY 3
-static int max_chgr_retry_count = MAX_INVALID_CHRGR_RETRY;
-module_param(max_chgr_retry_count, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(max_chgr_retry_count, "Max invalid charger retry count");
 #ifdef CONFIG_FORCE_FAST_CHARGE
 #include <linux/fastchg.h>
 #endif
@@ -778,10 +773,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					break;
 				case DWC3_SDP_CHARGER:
 #ifdef CONFIG_FORCE_FAST_CHARGE
-					if (force_fast_charge > 1)
-						dwc3_otg_set_power(phy,
-							fast_charge_level);
-					else if (force_fast_charge > 0)
+					if (force_fast_charge > 0)
 						dwc3_otg_set_power(phy,
 							DWC3_IDEV_CHG_MAX);
 					else
