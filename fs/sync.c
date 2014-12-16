@@ -145,6 +145,9 @@ SYSCALL_DEFINE1(syncfs, int, fd)
 	if (!fsync_enabled)
 		return 0;
 
+	if (!fsync_enabled)
+		return 0;
+
 	file = fget_light(fd, &fput_needed);
 	if (!file)
 		return -EBADF;
@@ -206,6 +209,10 @@ static int do_fsync(unsigned int fd, int datasync)
 		return 0;
 
 	file = fget(fd);
+
+	if (!fsync_enabled)
+		return 0;
+
 	if (file) {
 		ret = vfs_fsync(file, datasync);
 		fput(file);
@@ -217,7 +224,7 @@ SYSCALL_DEFINE1(fsync, unsigned int, fd)
 {
 	if (!fsync_enabled)
 		return 0;
-	
+
 	return do_fsync(fd, 0);
 }
 
@@ -225,7 +232,7 @@ SYSCALL_DEFINE1(fdatasync, unsigned int, fd)
 {
 	if (!fsync_enabled)
 		return 0;
-		
+
 	return do_fsync(fd, 1);
 }
 
@@ -241,7 +248,7 @@ int generic_write_sync(struct file *file, loff_t pos, loff_t count)
 {
 	if (!fsync_enabled)
 		return 0;
-		
+
 	if (!(file->f_flags & O_DSYNC) && !IS_SYNC(file->f_mapping->host))
 		return 0;
 	return vfs_fsync_range(file, pos, pos + count - 1,
