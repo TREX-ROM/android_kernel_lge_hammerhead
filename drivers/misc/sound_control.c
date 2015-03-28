@@ -28,7 +28,7 @@ unsigned int headset_boost = 0;
 /*
  * Speaker boost value
  */
-unsigned int speaker_boost = 0;
+unsigned int speaker_boost = 9;
 
 /*
  * Mic boost value
