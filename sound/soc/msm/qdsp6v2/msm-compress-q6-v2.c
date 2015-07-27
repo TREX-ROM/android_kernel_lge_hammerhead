@@ -81,6 +81,7 @@ struct msm_compr_gapless_state {
 	uint32_t trailing_samples_drop;
 	uint32_t gapless_transition;
 	bool use_dsp_gapless_mode;
+	union snd_codec_options codec_options;
 };
 
 static unsigned int supported_sample_rates[] = {
@@ -460,12 +461,31 @@ static void populate_codec_list(struct msm_compr_audio *prtd)
 }
 
 static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
-					     int stream_id)
+					     int stream_id,
+					     bool use_gapless_codec_options)
 {
 	struct snd_compr_runtime *runtime = cstream->runtime;
 	struct msm_compr_audio *prtd = runtime->private_data;
 	struct asm_aac_cfg aac_cfg;
+	struct asm_wma_cfg wma_cfg;
+	struct asm_wmapro_cfg wma_pro_cfg;
+	struct asm_flac_cfg flac_cfg;
+	union snd_codec_options *codec_options;
+
 	int ret = 0;
+
+	pr_debug("%s: use_gapless_codec_options %d\n",
+			__func__, use_gapless_codec_options);
+
+	if (use_gapless_codec_options)
+		codec_options = &(prtd->gapless_state.codec_options);
+	else
+		codec_options = &(prtd->codec_param.codec.options);
+
+	if (!codec_options) {
+		pr_err("%s: codec_options is NULL\n", __func__);
+		return -EINVAL;
+	}
 
 	switch (prtd->codec) {
 	case FORMAT_MP3:
@@ -481,6 +501,72 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 							  &aac_cfg, stream_id);
 		if (ret < 0)
 			pr_err("%s: CMD Format block failed\n", __func__);
+		break;
+	case FORMAT_AC3:
+		pr_debug("SND_AUDIOCODEC_AC3\n");
+		break;
+	case FORMAT_EAC3:
+		pr_debug("SND_AUDIOCODEC_EAC3\n");
+		break;
+	case FORMAT_WMA_V9:
+		pr_debug("SND_AUDIOCODEC_WMA\n");
+		memset(&wma_cfg, 0x0, sizeof(struct asm_wma_cfg));
+		wma_cfg.format_tag = prtd->codec_param.codec.format;
+		wma_cfg.ch_cfg = prtd->codec_param.codec.ch_in;
+		wma_cfg.sample_rate = prtd->sample_rate;
+		wma_cfg.avg_bytes_per_sec = codec_options->wma.avg_bit_rate/8;
+		wma_cfg.block_align = codec_options->wma.super_block_align;
+		wma_cfg.valid_bits_per_sample =
+			codec_options->wma.bits_per_sample;
+		wma_cfg.ch_mask = codec_options->wma.channelmask;
+		wma_cfg.encode_opt = codec_options->wma.encodeopt;
+		ret = q6asm_media_format_block_wma(prtd->audio_client,
+					&wma_cfg);
+		if (ret < 0)
+			pr_err("%s: CMD Format block failed\n", __func__);
+		break;
+	case FORMAT_WMA_V10PRO:
+		pr_debug("SND_AUDIOCODEC_WMA_PRO\n");
+		memset(&wma_pro_cfg, 0x0, sizeof(struct asm_wmapro_cfg));
+		wma_pro_cfg.format_tag = prtd->codec_param.codec.format;
+		wma_pro_cfg.ch_cfg = prtd->codec_param.codec.ch_in;
+		wma_pro_cfg.sample_rate = prtd->sample_rate;
+		wma_cfg.avg_bytes_per_sec = codec_options->wma.avg_bit_rate/8;
+		wma_pro_cfg.block_align = codec_options->wma.super_block_align;
+		wma_pro_cfg.valid_bits_per_sample =
+			codec_options->wma.bits_per_sample;
+		wma_pro_cfg.ch_mask = codec_options->wma.channelmask;
+		wma_pro_cfg.encode_opt = codec_options->wma.encodeopt;
+		wma_pro_cfg.adv_encode_opt = codec_options->wma.encodeopt1;
+		wma_pro_cfg.adv_encode_opt2 = codec_options->wma.encodeopt2;
+		ret = q6asm_media_format_block_wmapro(prtd->audio_client,
+				&wma_pro_cfg);
+		if (ret < 0)
+			pr_err("%s: CMD Format block failed\n", __func__);
+		break;
+	case FORMAT_MP2:
+		pr_debug("%s: SND_AUDIOCODEC_MP2\n", __func__);
+		break;
+	case FORMAT_FLAC:
+		pr_debug("%s: SND_AUDIOCODEC_FLAC\n", __func__);
+		memset(&flac_cfg, 0x0, sizeof(struct asm_flac_cfg));
+		flac_cfg.ch_cfg = prtd->num_channels;
+		flac_cfg.sample_rate = prtd->sample_rate;
+		flac_cfg.stream_info_present = 1;
+		flac_cfg.sample_size = codec_options->flac_dec.sample_size;
+		flac_cfg.min_blk_size = codec_options->flac_dec.min_blk_size;
+		flac_cfg.max_blk_size = codec_options->flac_dec.max_blk_size;
+		flac_cfg.max_frame_size =
+			codec_options->flac_dec.max_frame_size;
+		flac_cfg.min_frame_size =
+			codec_options->flac_dec.min_frame_size;
+
+		ret = q6asm_stream_media_format_block_flac(prtd->audio_client,
+							&flac_cfg, stream_id);
+		if (ret < 0)
+			pr_err("%s: CMD Format block failed ret %d\n",
+				__func__, ret);
+
 		break;
 	default:
 		pr_debug("%s, unsupported format, skip", __func__);
@@ -575,8 +661,8 @@ static int msm_compr_configure_dsp(struct snd_compr_stream *cstream)
 	prtd->buffer_paddr = ac->port[dir].buf[0].phys;
 	prtd->buffer_size  = runtime->fragments * runtime->fragment_size;
 
-	ret = msm_compr_send_media_format_block(cstream, ac->stream_id);
-	if (ret < 0)
+	ret = msm_compr_send_media_format_block(cstream, ac->stream_id, false);
+	if (ret < 0) {
 		pr_err("%s, failed to send media format block\n", __func__);
 
 	return ret;
@@ -1092,6 +1178,8 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			prtd->first_buffer = 1;
 			prtd->last_buffer = 0;
 			prtd->gapless_state.gapless_transition = 1;
+			prtd->marker_timestamp = 0;
+
 			/*
 			Don't reset these as these vars map to
 			total_bytes_transferred and total_bytes_available
@@ -1244,7 +1332,8 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 				 __func__);
 			break;
 		}
-		rc = msm_compr_send_media_format_block(cstream, stream_id);
+		rc = msm_compr_send_media_format_block(cstream,
+						stream_id, false);
 		if (rc < 0) {
 			 pr_err("%s, failed to send media format block\n",
 				__func__);
@@ -1510,6 +1599,51 @@ static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
 	}
 
 	return 0;
+}
+
+static int msm_compr_set_next_track_param(struct snd_compr_stream *cstream,
+				union snd_codec_options *codec_options)
+{
+	struct msm_compr_audio *prtd;
+	struct audio_client *ac;
+	int ret = 0;
+
+	pr_debug("%s\n", __func__);
+	if (!codec_options || !cstream)
+		return -EINVAL;
+
+	prtd = cstream->runtime->private_data;
+	if (!prtd || !prtd->audio_client) {
+		pr_err("%s: prtd or audio client is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	ac = prtd->audio_client;
+
+	pr_debug("%s: got codec options for codec type %u",
+		__func__, prtd->codec);
+	switch (prtd->codec) {
+	case FORMAT_WMA_V9:
+	case FORMAT_WMA_V10PRO:
+	case FORMAT_FLAC:
+		memcpy(&(prtd->gapless_state.codec_options),
+			codec_options,
+			sizeof(union snd_codec_options));
+		ret = msm_compr_send_media_format_block(cstream,
+						ac->stream_id, true);
+		if (ret < 0) {
+			pr_err("%s: failed to send media format block\n",
+				__func__);
+		}
+		break;
+
+	default:
+		pr_debug("%s: Ignore sending CMD Format block\n",
+			__func__);
+		break;
+	}
+
+	return ret;
 }
 
 static int msm_compr_volume_put(struct snd_kcontrol *kcontrol,
@@ -1826,16 +1960,17 @@ static int msm_compr_new(struct snd_soc_pcm_runtime *rtd)
 }
 
 static struct snd_compr_ops msm_compr_ops = {
-	.open		= msm_compr_open,
-	.free		= msm_compr_free,
-	.trigger	= msm_compr_trigger,
-	.pointer	= msm_compr_pointer,
-	.set_params	= msm_compr_set_params,
-	.set_metadata	= msm_compr_set_metadata,
-	.ack		= msm_compr_ack,
-	.copy		= msm_compr_copy,
-	.get_caps	= msm_compr_get_caps,
-	.get_codec_caps = msm_compr_get_codec_caps,
+	.open			= msm_compr_open,
+	.free			= msm_compr_free,
+	.trigger		= msm_compr_trigger,
+	.pointer		= msm_compr_pointer,
+	.set_params		= msm_compr_set_params,
+	.set_metadata		= msm_compr_set_metadata,
+	.set_next_track_param	= msm_compr_set_next_track_param,
+	.ack			= msm_compr_ack,
+	.copy			= msm_compr_copy,
+	.get_caps		= msm_compr_get_caps,
+	.get_codec_caps		= msm_compr_get_codec_caps,
 };
 
 static struct snd_soc_platform_driver msm_soc_platform = {
