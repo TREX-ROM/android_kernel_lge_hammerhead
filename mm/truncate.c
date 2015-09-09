@@ -607,3 +607,37 @@ void truncate_pagecache_range(struct inode *inode, loff_t lstart, loff_t lend)
 	truncate_inode_pages_range(mapping, lstart, lend);
 }
 EXPORT_SYMBOL(truncate_pagecache_range);
+
+
+void pagecache_isize_extended(struct inode *inode, loff_t from, loff_t to)
+ {
+         int bsize = 1 << inode->i_blkbits;
+         loff_t rounded_from;
+         struct page *page;
+         pgoff_t index;
+ 
+         WARN_ON(to > inode->i_size);
+ 
+         if (from >= to || bsize == PAGE_CACHE_SIZE)
+                 return;
+         /* Page straddling @from will not have any hole block created? */
+         rounded_from = round_up(from, bsize);
+         if (to <= rounded_from || !(rounded_from & (PAGE_CACHE_SIZE - 1)))
+                 return;
+ 
+         index = from >> PAGE_CACHE_SHIFT;
+         page = find_lock_page(inode->i_mapping, index);
+         /* Page not cached? Nothing to do */
+         if (!page)
+                 return;
+         /*
+          * See clear_page_dirty_for_io() for details why set_page_dirty()
+          * is needed.
+          */
+         if (page_mkclean(page))
+                 set_page_dirty(page);
+         unlock_page(page);
+         page_cache_release(page);
+ }
+EXPORT_SYMBOL(pagecache_isize_extended);
+
