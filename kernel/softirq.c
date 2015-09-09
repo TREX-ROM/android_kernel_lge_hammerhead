@@ -268,7 +268,6 @@ restart:
 		    --max_restart)
 			goto restart;
 
-	if (pending)
 		wakeup_softirqd();
 
 	lockdep_softirq_exit();
