@@ -205,12 +205,12 @@ EXPORT_SYMBOL(local_bh_enable_ip);
  * certain cases, such as stop_machine(), jiffies may cease to
  * increment and so we need the MAX_SOFTIRQ_RESTART limit as
  * well to make sure we eventually return from this method.
+ *
  * These limits have been established via experimentation. 
  * The two things to balance is latency against fairness -
  * we want to handle softirqs as soon as possible, but they
  * should not be able to lock up the box.
  */
-
 #define MAX_SOFTIRQ_TIME  msecs_to_jiffies(2)
 #define MAX_SOFTIRQ_RESTART 10
 
@@ -267,13 +267,12 @@ restart:
 	local_irq_disable();
 
 	pending = local_softirq_pending();
-
 	if (pending) {
 		if (time_before(jiffies, end) && !need_resched() &&
 		    --max_restart)
 			goto restart;
-
 		wakeup_softirqd();
+	}
 
 	lockdep_softirq_exit();
 
