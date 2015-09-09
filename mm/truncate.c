@@ -20,6 +20,8 @@
 				   do_invalidatepage */
 #include <linux/cleancache.h>
 #include "internal.h"
+#include <linux/rmap.h>
+
 /**
  * do_invalidatepage - invalidate part or all of a page
  * @page: the page which is affected
