@@ -247,6 +247,7 @@ static void debugfs_evict_inode(struct inode *inode)
 		kfree(inode->i_private);
 }
 
+
 static const struct super_operations debugfs_super_operations = {
 	.statfs		= simple_statfs,
 	.remount_fs	= debugfs_remount,
