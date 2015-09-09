@@ -15,6 +15,16 @@
 
 #include "smpboot.h"
 
+#ifdef CONFIG_USE_GENERIC_SMP_HELPERS
+static struct {
+	struct list_head	queue;
+	raw_spinlock_t		lock;
+} call_function __cacheline_aligned_in_smp =
+	{
+		.queue		= LIST_HEAD_INIT(call_function.queue),
+		.lock		= __RAW_SPIN_LOCK_UNLOCKED(call_function.lock),
+	};
+
 enum {
 	CSD_FLAG_LOCK		= 0x01,
 };
@@ -704,6 +714,8 @@ static inline void free_boot_cpu_mask(void)
 void __init smp_init(void)
 {
 	unsigned int cpu;
+
+	idle_threads_init();
 
 	/* FIXME: This should be done in userspace --RR */
 	for_each_present_cpu(cpu) {
