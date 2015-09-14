@@ -1949,57 +1949,32 @@ error_clk_off:
 	return status;
 }
 
-static int _status;
 
 /**
- * _adreno_start_work() - Work handler for the low latency adreno_start
- * @work: Pointer to the work_struct for
- *
- * The work callbak for the low lantecy GPU start - this executes the core
- * _adreno_start function in the workqueue.
+ * adreno_vbif_clear_pending_transactions() - Clear transactions in VBIF pipe
+ * @device: Pointer to the device whose VBIF pipe is to be cleared
  */
-static void adreno_start_work(struct work_struct *work)
-{
-	struct adreno_device *adreno_dev = container_of(work,
-		struct adreno_device, start_work);
-	struct kgsl_device *device = &adreno_dev->dev;
-
-	/* Nice ourselves to be higher priority but not too high priority */
-	set_user_nice(current, _wake_nice);
-
-	mutex_lock(&device->mutex);
-	_status = _adreno_start(adreno_dev);
-	mutex_unlock(&device->mutex);
-}
-
-/**
- * adreno_start() - Power up and initialize the GPU
- * @device: Pointer to the KGSL device to power up
- * @priority:  Boolean flag to specify of the start should be scheduled in a low
- * latency work queue
- *
- * Power up the GPU and initialize it.  If priority is specified then queue the
- * start function in a high priority queue for lower latency.
- */
-static int adreno_start(struct kgsl_device *device, int priority)
+static void adreno_vbif_clear_pending_transactions(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	unsigned int mask = A3XX_VBIF_XIN_HALT_CTRL0_MASK;
+	unsigned int val;
+	unsigned long wait_for_vbif;
 
-	/* No priority (normal latency) call the core start function directly */
-	if (!priority)
-		return _adreno_start(adreno_dev);
-
-	/*
-	 * If priority is specified (low latency) then queue the work in a
-	 * higher priority work queue and wait for it to finish
-	 */
-	queue_work(adreno_wq, &adreno_dev->start_work);
-	mutex_unlock(&device->mutex);
-	flush_work(&adreno_dev->start_work);
-	mutex_lock(&device->mutex);
-
-	return _status;
+	adreno_writereg(adreno_dev, ADRENO_REG_VBIF_XIN_HALT_CTRL0, mask);
+	/* wait for the transactions to clear */
+	wait_for_vbif = jiffies + msecs_to_jiffies(100);
+	while (1) {
+		adreno_readreg(adreno_dev,
+			ADRENO_REG_VBIF_XIN_HALT_CTRL1, &val);
+		if ((val & mask) == mask)
+			break;
+		if (time_after(jiffies, wait_for_vbif))
+			break;
+	}
+	adreno_writereg(adreno_dev, ADRENO_REG_VBIF_XIN_HALT_CTRL0, 0);
 }
+
 
 static int adreno_stop(struct kgsl_device *device)
 {
@@ -2044,15 +2019,13 @@ static int adreno_stop(struct kgsl_device *device)
 int adreno_reset(struct kgsl_device *device)
 {
 	int ret = -EINVAL;
-	struct kgsl_mmu *mmu = &device->mmu;
 	int i = 0;
 
-	/* Try soft reset first, for non mmu fault case only */
-	if (!atomic_read(&mmu->fault)) {
-		ret = adreno_soft_reset(device);
-		if (ret)
-			KGSL_DEV_ERR_ONCE(device, "Device soft reset failed\n");
-	}
+	/* clear pending vbif transactions before reset */
+	adreno_vbif_clear_pending_transactions(device);
+
+	/* Try soft reset first */
+	ret = adreno_soft_reset(device);
 	if (ret) {
 		/* If soft reset failed/skipped, then pull the power */
 		adreno_stop(device);
