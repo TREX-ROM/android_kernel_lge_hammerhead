@@ -145,9 +145,6 @@ SYSCALL_DEFINE1(syncfs, int, fd)
 	if (!fsync_enabled)
 		return 0;
 
-	if (!fsync_enabled)
-		return 0;
-
 	file = fget_light(fd, &fput_needed);
 	if (!file)
 		return -EBADF;
