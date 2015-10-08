@@ -149,9 +149,6 @@ static int __init get_uv_level(char *vdd_uv)
 __setup("vdd_uv=", get_uv_level); 
 
 /** end elementalx defs  **/
-
-
->>>>>>> 9b4c970... CPU overclocking
 static DEFINE_MUTEX(driver_lock);
 static DEFINE_SPINLOCK(l2_lock);
 
